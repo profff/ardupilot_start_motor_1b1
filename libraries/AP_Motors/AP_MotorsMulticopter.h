@@ -28,7 +28,9 @@
 
 // spool definition
 #define AP_MOTORS_SPOOL_UP_TIME_DEFAULT 0.5f    // time (in seconds) for throttle to increase from zero to min throttle, and min throttle to full throttle.
-
+#define AP_MOTORS_START_1B1_ORDER_LOW_DEFAULT       0x543210    // order for starting motor one by one each Hex digit is a motor number do not define more than 6 digits in this parameter use the  AP_MOTORS_START_1B1_ORDER_HIGH_DEFAULT for the nex 6 rotors
+#define AP_MOTORS_START_1B1_ORDER_HIGH_DEFAULT      0xBA9876    // order for starting motor one by one each Hex digit is a motor number
+#define AP_MOTORS_START_1B1_DELAY_DEFAULT           500         // time (ms) between motor start when starting one by one
 /// @class      AP_MotorsMulticopter
 class AP_MotorsMulticopter : public AP_Motors {
 public:
@@ -160,12 +162,14 @@ protected:
     AP_Float            _throttle_hover;        // estimated throttle required to hover throttle in the range 0 ~ 1
     AP_Int8             _throttle_hover_learn;  // enable/disabled hover thrust learning
     AP_Int8             _disarm_disable_pwm;    // disable PWM output while disarmed
-
     // Maximum lean angle of yaw servo in degrees. This is specific to tricopter
     AP_Float            _yaw_servo_angle_max_deg;
 
     // time to spool motors to min throttle
     AP_Float            _spool_up_time;
+    AP_Int32            _starting_1by1_order_low;   // indicate the order for starting motor
+    AP_Int32            _starting_1by1_order_high;  // indicate the order for starting motor
+    AP_Int16            _starting_1by1_delay;       // delay between starting motors
 
     // scaling for booster motor throttle
     AP_Float            _boost_scale;
@@ -174,7 +178,7 @@ protected:
     bool                motor_enabled[AP_MOTORS_MAX_NUM_MOTORS];    // true if motor is enabled
     int16_t             _throttle_radio_min;        // minimum PWM from RC input's throttle channel (i.e. minimum PWM input from receiver, RC3_MIN)
     int16_t             _throttle_radio_max;        // maximum PWM from RC input's throttle channel (i.e. maximum PWM input from receiver, RC3_MAX)
-
+    // bool                motor_order[AP_MOTORS_MAX_NUM_MOTORS]; // tab for mortor start order extract of _starting_1by1_order param (each hex digit is a motor number)
     // spool variables
     spool_up_down_mode  _spool_mode;         // motor's current spool mode
     float               _spin_up_ratio;      // throttle percentage (0 ~ 1) between zero and throttle_min

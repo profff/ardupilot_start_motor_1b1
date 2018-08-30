@@ -183,6 +183,33 @@ const AP_Param::GroupInfo AP_MotorsMulticopter::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("BAT_IDX",  39, AP_MotorsMulticopter,  _batt_idx, 0),
 
+    // @Param: ST1B1_ORDERL
+    // @DisplayName: Motor start order
+    // @Description: Indicate  the motor order (each hex digit is a motor number) 0x543210 will start motor number 0 first then 1 then 2 etc ... until 5  do not define more that 6 digits for first 6 motor to run define the 6 following motor order in the MOT_ST1B1_ORDERH
+    // @Range: 0x012345 0xBA9876
+    // @Units: none
+    // @Increment: none
+    // @User: Advanced
+    AP_GROUPINFO("ST1B1_ORDERL",  40, AP_MotorsMulticopter, _starting_1by1_order_low, AP_MOTORS_START_1B1_ORDER_LOW_DEFAULT),
+
+    // @Param: ST1B1_ORDERH
+    // @DisplayName: Motor start order
+    // @Description: Indicate  the motor order (each hex digit is a motor number) 0x543210 will start motor number 0 first then 1 then 2 etc ... until 5
+    // @Range: 0x012345 0xBA9876
+    // @Units: none
+    // @Increment: none
+    // @User: Advanced
+    AP_GROUPINFO("ST1B1_ORDERH",  41, AP_MotorsMulticopter, _starting_1by1_order_high, AP_MOTORS_START_1B1_ORDER_HIGH_DEFAULT),
+
+    // @Param: ST1B1_DELAY
+    // @DisplayName: Motor start delay
+    // @Description: time in ms between each motor start  
+    // @Range: 0 16000
+    // @Units: ms
+    // @Increment: 1
+    // @User: Advanced
+    AP_GROUPINFO("ST1B1_DELAY",   42, AP_MotorsMulticopter, _starting_1by1_delay,AP_MOTORS_START_1B1_DELAY_DEFAULT),
+    
     AP_GROUPEND
 };
 
@@ -419,6 +446,7 @@ void AP_MotorsMulticopter::update_throttle_hover(float dt)
 // run spool logic
 void AP_MotorsMulticopter::output_logic()
 {
+
     if (_flags.armed) {
         _disarm_safety_timer = 100;
     } else if (_disarm_safety_timer != 0) {
@@ -435,9 +463,22 @@ void AP_MotorsMulticopter::output_logic()
         // prevent float exception
         _spool_up_time.set(0.05);
     }
+//    switch (_spool_mode) {
+//    case SHUT_DOWN:  hal.console->printf("SD ");
+//        break;
+//    case SPIN_WHEN_ARMED: hal.console->printf("AM ");
+//        break;
+//    case SPOOL_UP: hal.console->printf("SPU ");
+//        break;
+//    case THROTTLE_UNLIMITED: hal.console->printf("TU ");
+//        break;
+//    case SPOOL_DOWN: hal.console->printf("SPD ");
+//        break;
+//    }
 
     switch (_spool_mode) {
         case SHUT_DOWN:
+        {
             // Motors should be stationary.
             // Servos set to their trim values or in a test condition.
 
@@ -450,6 +491,7 @@ void AP_MotorsMulticopter::output_logic()
             // make sure the motors are spooling in the correct direction
             if (_spool_desired != DESIRED_SHUT_DOWN) {
                 _spool_mode = SPIN_WHEN_ARMED;
+                hal.console->printf("\n to ARMED\n");
                 break;
             }
 
@@ -457,7 +499,7 @@ void AP_MotorsMulticopter::output_logic()
             _spin_up_ratio = 0.0f;
             _throttle_thrust_max = 0.0f;
             break;
-
+        }
         case SPIN_WHEN_ARMED: {
             // Motors should be stationary or at spin when armed.
             // Servos should be moving to correct the current attitude.
@@ -467,7 +509,6 @@ void AP_MotorsMulticopter::output_logic()
             limit.yaw = true;
             limit.throttle_lower = true;
             limit.throttle_upper = true;
-
             // set and increment ramp variables
             float spool_step = 1.0f/(_spool_up_time*_loop_rate);
             if (_spool_desired == DESIRED_SHUT_DOWN){
@@ -475,14 +516,15 @@ void AP_MotorsMulticopter::output_logic()
                 // constrain ramp value and update mode
                 if (_spin_up_ratio <= 0.0f) {
                     _spin_up_ratio = 0.0f;
-                    _spool_mode = SHUT_DOWN;
+//                    _spool_mode = SHUT_DOWN;hal.console->printf("\n to SHUT DOWN\n");
                 }
             } else if(_spool_desired == DESIRED_THROTTLE_UNLIMITED) {
                 _spin_up_ratio += spool_step;
                 // constrain ramp value and update mode
                 if (_spin_up_ratio >= 1.0f) {
                     _spin_up_ratio = 1.0f;
-                    _spool_mode = SPOOL_UP;
+//                        hal.console->printf("\n to SPOOL_UP\n");
+//                        _spool_mode = SPOOL_UP;
                 }
             } else {    // _spool_desired == SPIN_WHEN_ARMED
                 float spin_up_armed_ratio = 0.0f;
@@ -495,6 +537,7 @@ void AP_MotorsMulticopter::output_logic()
             break;
         }
         case SPOOL_UP:
+        {
             // Maximum throttle should move from minimum to maximum.
             // Servos should exhibit normal flight behavior.
 
@@ -507,6 +550,8 @@ void AP_MotorsMulticopter::output_logic()
             // make sure the motors are spooling in the correct direction
             if (_spool_desired != DESIRED_THROTTLE_UNLIMITED ){
                 _spool_mode = SPOOL_DOWN;
+                hal.console->printf("\n to SPOOL DOWN\n");
+
                 break;
             }
 
@@ -517,13 +562,15 @@ void AP_MotorsMulticopter::output_logic()
             // constrain ramp value and update mode
             if (_throttle_thrust_max >= MIN(get_throttle(), get_current_limit_max_throttle())) {
                 _throttle_thrust_max = get_current_limit_max_throttle();
-                _spool_mode = THROTTLE_UNLIMITED;
+                _spool_mode = THROTTLE_UNLIMITED;                hal.console->printf("\n to UNLIMITED\n");
+
             } else if (_throttle_thrust_max < 0.0f) {
                 _throttle_thrust_max = 0.0f;
             }
             break;
-
+        }
         case THROTTLE_UNLIMITED:
+        {
             // Throttle should exhibit normal flight behavior.
             // Servos should exhibit normal flight behavior.
 
@@ -535,7 +582,8 @@ void AP_MotorsMulticopter::output_logic()
 
             // make sure the motors are spooling in the correct direction
             if (_spool_desired != DESIRED_THROTTLE_UNLIMITED) {
-                _spool_mode = SPOOL_DOWN;
+                _spool_mode = SPOOL_DOWN;                hal.console->printf("\n to SPOOL DOWN\n");
+
                 break;
             }
 
@@ -543,8 +591,9 @@ void AP_MotorsMulticopter::output_logic()
             _spin_up_ratio = 1.0f;
             _throttle_thrust_max = get_current_limit_max_throttle();
             break;
-
+        }
         case SPOOL_DOWN:
+        {
             // Maximum throttle should move from maximum to minimum.
             // Servos should exhibit normal flight behavior.
 
@@ -556,7 +605,8 @@ void AP_MotorsMulticopter::output_logic()
 
             // make sure the motors are spooling in the correct direction
             if (_spool_desired == DESIRED_THROTTLE_UNLIMITED) {
-                _spool_mode = SPOOL_UP;
+                _spool_mode = SPOOL_UP;                hal.console->printf("\n to SPOOL_UP\n");
+
                 break;
             }
 
@@ -571,9 +621,11 @@ void AP_MotorsMulticopter::output_logic()
             if (_throttle_thrust_max >= get_current_limit_max_throttle()) {
                 _throttle_thrust_max = get_current_limit_max_throttle();
             } else if (is_zero(_throttle_thrust_max)) {
-                _spool_mode = SPIN_WHEN_ARMED;
+                _spool_mode = SPIN_WHEN_ARMED;                hal.console->printf("\n to ARMED\n");
+
             }
             break;
+        }
     }
 }
 
@@ -586,6 +638,7 @@ void AP_MotorsMulticopter::set_throttle_passthrough_for_esc_calibration(float th
         // send the pilot's input directly to each enabled motor
         for (uint16_t i=0; i < AP_MOTORS_MAX_NUM_MOTORS; i++) {
             if (motor_enabled[i]) {
+                hal.console->printf("{%d,%d}\n",i,pwm_out);
                 rc_write(i, pwm_out);
             }
         }
@@ -605,6 +658,7 @@ void AP_MotorsMulticopter::output_motor_mask(float thrust, uint8_t mask)
             } else {
                 motor_out = get_pwm_output_min();
             }
+            hal.console->printf("[%d,%d]\n",i,motor_out);
             rc_write(i, motor_out);
         }
     }

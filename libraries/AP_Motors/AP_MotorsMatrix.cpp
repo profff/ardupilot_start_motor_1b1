@@ -71,13 +71,17 @@ void AP_MotorsMatrix::set_frame_class_and_type(motor_frame_class frame_class, mo
 
 void AP_MotorsMatrix::output_to_motors()
 {
-    int8_t i;
+    int8_t i;static uint8_t j=0;
     int16_t motor_out[AP_MOTORS_MAX_NUM_MOTORS];    // final pwm values sent to the motor
 
+    uint32_t now=AP_HAL::millis();
+    static uint32_t lastpass=0;
+    static bool AlreadyArmed=false;
     switch (_spool_mode) {
         case SHUT_DOWN: {
             // sends minimum values out to the motors
             // set motor output based on thrust requests
+            AlreadyArmed=false;j=0;
             for (i=0; i<AP_MOTORS_MAX_NUM_MOTORS; i++) {
                 if (motor_enabled[i]) {
                     if (_disarm_disable_pwm && _disarm_safety_timer == 0 && !armed()) {
@@ -90,20 +94,101 @@ void AP_MotorsMatrix::output_to_motors()
             break;
         }
         case SPIN_WHEN_ARMED:
+        {
+
             // sends output to motors when armed but not flying
-            for (i=0; i<AP_MOTORS_MAX_NUM_MOTORS; i++) {
-                if (motor_enabled[i]) {
-                    motor_out[i] = calc_spin_up_to_pwm();
+
+            switch(_spool_desired)
+            {
+                case DESIRED_THROTTLE_UNLIMITED:
+                {
+                    if(AlreadyArmed)
+                        // constrain ramp value and update mode
+                        if ((_spin_up_ratio >= 1.0f))
+                            {
+                                _spin_up_ratio = 1.0f;j=0;
+                                hal.console->printf("\n to SPOOL_UP\n");
+                                _spool_mode = SPOOL_UP;
+                            }
                 }
+                break;
+                case DESIRED_SHUT_DOWN:
+                {
+                // constrain ramp value and update mode
+                if (_spin_up_ratio <= 0.0f) {
+                    _spin_up_ratio = 0.0f;j=0;
+                    _spool_mode = SHUT_DOWN;hal.console->printf("\n to SHUT DOWN\n");
+                    }
+                }
+                break;
+                default:
+                {
+                }
+                break;
             }
-            break;
+            if ( j<AP_MOTORS_MAX_NUM_MOTORS)
+                {
+                    if((int16_t)(now-lastpass)>_starting_1by1_delay)
+                        {
+                            lastpass=now;
+                            j++;
+                        }
+                }
+            else
+                {
+                    AlreadyArmed=true;
+                }
+            
+  
+            if(AlreadyArmed)
+                j=AP_MOTORS_MAX_NUM_MOTORS;
+
+            /*for (i=0; i<j; i++) {
+                 if (motor_enabled[i]) {
+                     motor_out[i] = calc_spin_up_to_pwm();
+                 }
+             }
+             for (i=j; i<AP_MOTORS_MAX_NUM_MOTORS; i++) {
+                 if (motor_enabled[i]) {
+                     motor_out[i] = get_pwm_output_min();
+                 }
+
+                 }*/
+
+                     
+            uint64_t order=0xFFFFFFFFFFFFFFFF;
+            order &= _starting_1by1_order_high;
+            order = order << 24;
+            order +=_starting_1by1_order_low;
+            uint64_t mn=0;
+            uint64_t mnc=0;
+            
+            hal.console->printf("\n %llx \n",order);
+            for (i=0; i<AP_MOTORS_MAX_NUM_MOTORS; i++) {
+                mn=order>>(i*4);
+                mnc=mn>>4;
+                mnc<<=4;
+                mn-=mnc;
+                if(mn<AP_MOTORS_MAX_NUM_MOTORS)
+                    if (motor_enabled[mn])
+                        {
+                            if(i<j)
+                                motor_out[mn] = calc_spin_up_to_pwm();
+                            else
+                                motor_out[mn] = get_pwm_output_min(); 
+                        }
+                hal.console->printf("[%llu %d]",mn,  motor_out[mn]);
+            }
+            
+        }
+        break;
         case SPOOL_UP:
         case THROTTLE_UNLIMITED:
-        case SPOOL_DOWN:
+        case SPOOL_DOWN:j=0; 
             // set motor output based on thrust requests
             for (i=0; i<AP_MOTORS_MAX_NUM_MOTORS; i++) {
                 if (motor_enabled[i]) {
-                    motor_out[i] = calc_thrust_to_pwm(_thrust_rpyt_out[i]);
+                   motor_out[i] = calc_thrust_to_pwm(_thrust_rpyt_out[i]);
                 }
             }
             break;

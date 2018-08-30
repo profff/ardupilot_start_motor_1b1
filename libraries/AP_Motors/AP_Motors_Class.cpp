@@ -93,6 +93,7 @@ void AP_Motors::rc_write_angle(uint8_t chan, int16_t angle_cd)
  */
 void AP_Motors::rc_set_freq(uint32_t mask, uint16_t freq_hz)
 {
+     hal.console->printf("[[%08X,%d]]\n",mask,freq_hz);
     if (freq_hz > 50) {
         _motor_fast_mask |= mask;
     }
